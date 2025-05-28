@@ -23,7 +23,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fluxcd/pkg/oci"
-	sourcev1 "github.com/fluxcd/source-controller/api/v1beta2"
+	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 
 	"github.com/fluxcd/flux2/v2/internal/flags"
 )
@@ -31,8 +31,8 @@ import (
 var tagArtifactCmd = &cobra.Command{
 	Use:   "artifact",
 	Short: "Tag artifact",
-	Long: withPreviewNote(`The tag artifact command creates tags for the given OCI artifact.
-The command can read the credentials from '~/.docker/config.json' but they can also be passed with --creds. It can also login to a supported provider with the --provider flag.`),
+	Long: `The tag artifact command creates tags for the given OCI artifact.
+The command can read the credentials from '~/.docker/config.json' but they can also be passed with --creds. It can also login to a supported provider with the --provider flag.`,
 	Example: `  # Tag an artifact version as latest
   flux tag artifact oci://ghcr.io/org/manifests/app:v0.0.1 --tag latest
 `,
@@ -78,19 +78,23 @@ func tagArtifactCmdRun(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), rootArgs.timeout)
 	defer cancel()
 
-	ociClient := oci.NewClient(oci.DefaultOptions())
+	opts := oci.DefaultOptions()
+
+	if tagArtifactArgs.provider.String() != sourcev1.GenericOCIProvider {
+		logger.Actionf("logging in to registry with provider credentials")
+		opt, err := loginWithProvider(ctx, url, tagArtifactArgs.provider.String())
+		if err != nil {
+			return fmt.Errorf("error during login with provider: %w", err)
+		}
+		opts = append(opts, opt)
+	}
+
+	ociClient := oci.NewClient(opts)
 
 	if tagArtifactArgs.provider.String() == sourcev1.GenericOCIProvider && tagArtifactArgs.creds != "" {
 		logger.Actionf("logging in to registry with credentials")
 		if err := ociClient.LoginWithCredentials(tagArtifactArgs.creds); err != nil {
 			return fmt.Errorf("could not login with credentials: %w", err)
-		}
-	}
-
-	if tagArtifactArgs.provider.String() != sourcev1.GenericOCIProvider {
-		logger.Actionf("logging in to registry with provider credentials")
-		if err := ociClient.LoginWithProvider(ctx, url, tagArtifactArgs.provider.String()); err != nil {
-			return fmt.Errorf("error during login with provider: %w", err)
 		}
 	}
 

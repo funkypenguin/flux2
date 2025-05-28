@@ -21,20 +21,20 @@ import (
 	"fmt"
 	"os"
 
-	sourcev1 "github.com/fluxcd/source-controller/api/v1beta2"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/spf13/cobra"
 
-	"github.com/fluxcd/flux2/v2/internal/flags"
-
 	"github.com/fluxcd/pkg/oci"
+	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+
+	"github.com/fluxcd/flux2/v2/internal/flags"
 )
 
 var pullArtifactCmd = &cobra.Command{
 	Use:   "artifact",
 	Short: "Pull artifact",
-	Long: withPreviewNote(`The pull artifact command downloads and extracts the OCI artifact content to the given path.
-The command can read the credentials from '~/.docker/config.json' but they can also be passed with --creds. It can also login to a supported provider with the --provider flag.`),
+	Long: `The pull artifact command downloads and extracts the OCI artifact content to the given path.
+The command can read the credentials from '~/.docker/config.json' but they can also be passed with --creds. It can also login to a supported provider with the --provider flag.`,
 	Example: `  # Pull an OCI artifact created by flux from GHCR
   flux pull artifact oci://ghcr.io/org/manifests/app:v0.0.1 --output ./path/to/local/manifests
 `,
@@ -92,19 +92,21 @@ func pullArtifactCmdRun(cmd *cobra.Command, args []string) error {
 		opts = append(opts, crane.Insecure)
 	}
 
+	if pullArtifactArgs.provider.String() != sourcev1.GenericOCIProvider {
+		logger.Actionf("logging in to registry with provider credentials")
+		opt, err := loginWithProvider(ctx, url, pullArtifactArgs.provider.String())
+		if err != nil {
+			return fmt.Errorf("error during login with provider: %w", err)
+		}
+		opts = append(opts, opt)
+	}
+
 	ociClient := oci.NewClient(opts)
 
 	if pullArtifactArgs.provider.String() == sourcev1.GenericOCIProvider && pullArtifactArgs.creds != "" {
 		logger.Actionf("logging in to registry with credentials")
 		if err := ociClient.LoginWithCredentials(pullArtifactArgs.creds); err != nil {
 			return fmt.Errorf("could not login with credentials: %w", err)
-		}
-	}
-
-	if pullArtifactArgs.provider.String() != sourcev1.GenericOCIProvider {
-		logger.Actionf("logging in to registry with provider credentials")
-		if err := ociClient.LoginWithProvider(ctx, url, pullArtifactArgs.provider.String()); err != nil {
-			return fmt.Errorf("error during login with provider: %w", err)
 		}
 	}
 
