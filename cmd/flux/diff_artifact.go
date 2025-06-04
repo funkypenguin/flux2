@@ -22,7 +22,7 @@ import (
 	"os"
 
 	"github.com/fluxcd/pkg/oci"
-	sourcev1 "github.com/fluxcd/source-controller/api/v1beta2"
+	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/spf13/cobra"
 
@@ -32,7 +32,7 @@ import (
 var diffArtifactCmd = &cobra.Command{
 	Use:   "artifact",
 	Short: "Diff Artifact",
-	Long:  withPreviewNote(`The diff artifact command computes the diff between the remote OCI artifact and a local directory or file`),
+	Long:  `The diff artifact command computes the diff between the remote OCI artifact and a local directory or file`,
 	Example: `# Check if local files differ from remote
 flux diff artifact oci://ghcr.io/stefanprodan/manifests:podinfo:6.2.0 --path=./kustomize`,
 	RunE: diffArtifactCmdRun,
@@ -91,19 +91,21 @@ func diffArtifactCmdRun(cmd *cobra.Command, args []string) error {
 		opts = append(opts, crane.Insecure)
 	}
 
+	if diffArtifactArgs.provider.String() != sourcev1.GenericOCIProvider {
+		logger.Actionf("logging in to registry with provider credentials")
+		opt, err := loginWithProvider(ctx, url, diffArtifactArgs.provider.String())
+		if err != nil {
+			return fmt.Errorf("error during login with provider: %w", err)
+		}
+		opts = append(opts, opt)
+	}
+
 	ociClient := oci.NewClient(opts)
 
 	if diffArtifactArgs.provider.String() == sourcev1.GenericOCIProvider && diffArtifactArgs.creds != "" {
 		logger.Actionf("logging in to registry with credentials")
 		if err := ociClient.LoginWithCredentials(diffArtifactArgs.creds); err != nil {
 			return fmt.Errorf("could not login with credentials: %w", err)
-		}
-	}
-
-	if diffArtifactArgs.provider.String() != sourcev1.GenericOCIProvider {
-		logger.Actionf("logging in to registry with provider credentials")
-		if err := ociClient.LoginWithProvider(ctx, url, diffArtifactArgs.provider.String()); err != nil {
-			return fmt.Errorf("error during login with provider: %w", err)
 		}
 	}
 
