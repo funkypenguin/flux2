@@ -33,9 +33,8 @@ import (
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/yaml"
 
-	authutils "github.com/fluxcd/pkg/auth/utils"
 	"github.com/fluxcd/pkg/oci"
-	sourcev1 "github.com/fluxcd/source-controller/api/v1beta2"
+	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 
 	"github.com/fluxcd/flux2/v2/internal/flags"
 )
@@ -43,8 +42,8 @@ import (
 var pushArtifactCmd = &cobra.Command{
 	Use:   "artifact",
 	Short: "Push artifact",
-	Long: withPreviewNote(`The push artifact command creates a tarball from the given directory or the single file and uploads the artifact to an OCI repository.
-The command can read the credentials from '~/.docker/config.json' but they can also be passed with --creds. It can also login to a supported provider with the --provider flag.`),
+	Long: `The push artifact command creates a tarball from the given directory or the single file and uploads the artifact to an OCI repository.
+The command can read the credentials from '~/.docker/config.json' but they can also be passed with --creds. It can also login to a supported provider with the --provider flag.`,
 	Example: `  # Push manifests to GHCR using the short Git SHA as the OCI artifact tag
   echo $GITHUB_PAT | docker login ghcr.io --username flux --password-stdin
   flux push artifact oci://ghcr.io/org/config/app:$(git rev-parse --short HEAD) \
@@ -224,13 +223,13 @@ func pushArtifactCmdRun(cmd *cobra.Command, args []string) error {
 		opts = append(opts, crane.WithAuth(authenticator))
 	}
 
-	if pushArtifactArgs.provider.String() != sourcev1.GenericOCIProvider {
+	if provider := pushArtifactArgs.provider.String(); provider != sourcev1.GenericOCIProvider {
 		logger.Actionf("logging in to registry with provider credentials")
-		authenticator, err = authutils.GetArtifactRegistryCredentials(ctx, pushArtifactArgs.provider.String(), url)
+		authOpt, err := loginWithProvider(ctx, url, provider)
 		if err != nil {
 			return fmt.Errorf("error during login with provider: %w", err)
 		}
-		opts = append(opts, crane.WithAuth(authenticator))
+		opts = append(opts, authOpt)
 	}
 
 	if rootArgs.timeout != 0 {

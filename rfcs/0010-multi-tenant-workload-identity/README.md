@@ -565,7 +565,7 @@ the Flux APIs is to associate the Flux objects with Kubernetes `ServiceAccounts`
 We propose building the `ServiceAccount` token creation and exchange logic into
 the Flux controllers through a library in the `github.com/fluxcd/pkg` repository.
 
-### API Changes
+### API Changes and Feature Gates
 
 For all the Flux APIs interacting with cloud providers (except `Kustomization`,
 see the paragraph below), we propose introducing the field `spec.serviceAccountName`
@@ -596,6 +596,12 @@ multi-tenancy for both cloud and Kubernetes API interactions. Furthermore,
 the cloud provider in the `Kustomization` API is detected by the SOPS SDK
 itself while decrypting the secrets, so we don't need to introduce a new
 field for this purpose.
+
+To enable using the new `serviceAccountName` fields, we propose introducing
+a feature gate called `ObjectLevelWorkloadIdentity` in the controllers that
+would support the feature. In the first release we should make it opt-in so
+cluster admins can consciously roll it out. If the feature gate is disabled
+and users set the field a terminal error should be returned.
 
 ### Workload Identity Library
 
